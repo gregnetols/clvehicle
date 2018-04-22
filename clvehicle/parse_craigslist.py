@@ -1,10 +1,11 @@
 from bs4 import BeautifulSoup as bs4
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 import requests
 import pandas as pd
 import re
 import time
 import utilities
+import random
 
 
 def parse_results(results):
@@ -27,15 +28,22 @@ def parse_vehicle_urls(results):
     print('Parsing the ads')
 
     vehicle_list = []
+    proxies = utilities.get_proxies()
 
     for k, url in enumerate(results['url']):
         vehicle = dict()
 
+        # On the first and every 10 url hits switch proxy
+        if k == 0 or k % 10 == 0:
+            proxy = utilities.select_proxy(proxies)
+
         for column_name in results.columns:
             vehicle[column_name] = results[column_name].iloc[k]
 
-        rsp = requests.get(url)
-        html = bs4(rsp.text, 'html.parser')
+        rsp = Request(url)
+        rsp.set_proxy(proxy['ip'] + ':' + proxy['port'])
+        raw_html = urlopen(rsp)
+        html = bs4(raw_html, 'html.parser')
 
         try:
             vehresults = html.body.find_all('p', attrs={'class':'attrgroup'})
@@ -43,7 +51,6 @@ def parse_vehicle_urls(results):
             try:
                 vyear = vehresults[0].find_all('span')[0].get_text()[0:4]
                 vehicle['Year'] = vyear
-
 
                 vehicle_info = vehresults[1].find_all('span')
                 for l in range(len(vehicle_info)):
@@ -69,7 +76,6 @@ def parse_vehicle_urls(results):
 def parse_craigslist_sites():
     sites = []
     us_sites_list_url = 'https://geo.craigslist.org/iso/us'
-
 
     html = urlopen(us_sites_list_url)
     us_sites_html = bs4(html, 'html.parser')
